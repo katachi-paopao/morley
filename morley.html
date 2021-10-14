@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>モーリーの三角形</title>
+  <script src="js/Point.js"></script>
+  <script src="js/Edge.js"></script>
+  <script src="js/Triangle.js"></script>
+</head>
+<style>
+    .canvas {
+        border: 1px solid black;
+    }
+    .container{
+        display:    flex;
+    }
+</style>
+<body>
+    <div class="container">
+        <canvas id="canvas" class="canvas" width="640" height="480"></canvas>
+    </div>
+    <div id="control"></div>
+        <button id="draw">モーリーの三角形の描画</button>
+        <button id="reset">母点の消去</button>
+        <button id="circum">外接円の描画</button>
+    </div>
+</body>
+<script>
+    var canvas = document.getElementById("canvas");
+    var draw = document.getElementById("draw");
+    var reset = document.getElementById("reset");
+    var ctx = canvas.getContext("2d");
+    var points = [];
+    let currentDragging = null;
+
+    class DraggablePoint{
+        constructor(p){
+            this.p = p;
+            this.r = 12;
+            this.isDragging = false;
+        }
+    }
+
+    canvas.addEventListener("mousedown", (e) => {
+        if (points.length == 3){
+            for (let i=0; i < points.length; i++){
+                if (Math.sqrt(
+                        (event.offsetX - points[i].p.x)**2
+                        + (event.offsetY - points[i].p.y)**2
+                    ) <= points[i].r) {
+                        points[i].isDragging = true;
+                        currentDragging = points[i];
+                        return;
+                    }
+            }
+        }
+    })
+
+
+    canvas.addEventListener("mousemove", (e) =>{
+        if (currentDragging && currentDragging.isDragging) {
+            currentDragging.p.x = e.offsetX;
+            currentDragging.p.y = e.offsetY;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (var i = 0; i < points.length; i++){
+                drawPoint(points[i].p);
+            }
+            drawPoint(currentDragging.p, "red", 6);
+
+            var t = new Triangle(points[0].p, points[1].p, points[2].p);
+            drawEdge(t.e1, "black", 2);
+            drawEdge(t.e2, "black", 2);
+            drawEdge(t.e3, "black", 2);
+            morley_triangle(t);
+        }
+    })
+
+    canvas.addEventListener("mouseup", (e) => {
+        if (currentDragging && currentDragging.isDragging) {
+            currentDragging.p.x = e.offsetX;
+            currentDragging.p.y = e.offsetY;
+            currentDragging.isDragging = false;
+            currentDragging == null;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (var i = 0; i < points.length; i++){
+                drawPoint(points[i].p);
+            }
+            var t = new Triangle(points[0].p, points[1].p, points[2].p);
+            drawEdge(t.e1, "black", 2);
+            drawEdge(t.e2, "black", 2);
+            drawEdge(t.e3, "black", 2);
+            morley_triangle(t);
+        }
+    })
+
+    canvas.addEventListener("click", (event) => {
+        if (points.length < 3){
+            points.push(new DraggablePoint(new Point(event.offsetX, event.offsetY)));
+        }
+
+        for (var i = 0; i < points.length; i++){
+            drawPoint(points[i].p);
+        }
+    });
+
+    draw.addEventListener("click", () => {
+        if (points.length != 3) return;
+        var t = new Triangle(points[0].p, points[1].p, points[2].p);
+        drawEdge(t.e1, "black", 2);
+        drawEdge(t.e2, "black", 2);
+        drawEdge(t.e3, "black", 2);
+        morley_triangle(t);
+    });
+
+    reset.addEventListener("click", () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        points = [];
+    });
+
+    circum.addEventListener("click", () => {
+        if (points.length != 3) return;
+        var t = new Triangle(points[0].p, points[1].p, points[2].p);
+        drawPoint(t.getCirc(), "red");
+        drawCircle(t.getCirc(), t.p1.dist(t.getCirc()), "red");
+    });
+
+    function drawPoint(point, color="black", size=3){
+        ctx.fillStyle = color;
+
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, size, 0, Math.PI * 2, false);
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    function drawEdge(edge, color="black", size=1){
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size;
+        ctx.moveTo(edge.p1.x, edge.p1.y);
+        ctx.lineTo(edge.p2.x, edge.p2.y);
+        ctx.stroke();
+        ctx.closePath();
+    }
+
+    function drawRotEdge(edge, angle=0, color="black"){
+        ctx.beginPath();
+        ctx.moveTo(edge.p1.x, edge.p1.y);
+        ctx.lineTo(edge.p2.x, edge.p2.y);
+        ctx.stroke();
+        ctx.closePath();
+    }
+
+    function drawCircle(center, r, ...color){
+        if (color.length == 0) {
+            ctx.strokeStyle = "black";
+        } else {
+            ctx.strokeStyle = color[0];
+        }
+
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, r, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.closePath();
+    }
+
+    function rotateEdge(edge, angle){
+        // 反時計回りに回転させる。canvasはy座標が下向きに増加し、正角では時計回りとなるので負角にする。
+        let p = new Point(edge.p2.x - edge.p1.x, edge.p2.y - edge.p1.y);
+        let px = p.x;
+        let py = p.y;
+        p.x = px * Math.cos(-angle) - py * Math.sin(-angle) + edge.p1.x;
+        p.y = px * Math.sin(-angle) + py * Math.cos(-angle) + edge.p1.y;
+        return new Edge(edge.p1, p);
+    }
+
+    function morley_triangle(t){
+        let p;
+        let min_p;
+        let tp = [t.p1, t.p2, t.p3];
+        let trisectors = [];
+        let mp = [];
+
+        trisectors.push(t.trisector(tp[0]));
+        trisectors.push(t.trisector(tp[1]));
+        trisectors.push(t.trisector(tp[2]));
+
+        for (var i = 0; i < 3; i++){
+            min_p = null;
+            for (var j = 0; j < 2; j++){
+                for (var k = 0; k < 2; k++){
+                    p = trisectors[i][j].cross(trisectors[(i+1)%tp.length][k]);
+                    if (min_p == null ||
+                    tp[i].dist(p) + tp[(i+1)%tp.length].dist(p) < tp[i].dist(min_p) + tp[(i+1)%tp.length].dist(min_p)) min_p = p;
+                }
+            }
+            mp.push(min_p);
+            drawPoint(min_p, "black", 5);
+        }
+
+        let mt = new Triangle(mp[0], mp[1], mp[2]);
+        drawEdge(mt.e1, "black", 5);
+        drawEdge(mt.e2, "black", 5);
+        drawEdge(mt.e3, "black", 5);
+    }
+</script>
+</html>
